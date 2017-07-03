@@ -1,5 +1,5 @@
 import cx from 'classnames'
-import _ from 'lodash/fp'
+import _ from 'lodash'
 import PropTypes from 'prop-types'
 import React from 'react'
 
@@ -11,6 +11,7 @@ import {
   getUnhandledProps,
   makeDebugger,
   META,
+  partitionHTMLInputProps,
   useKeyOnly,
 } from '../../lib'
 const debug = makeDebugger('checkbox')
@@ -107,7 +108,10 @@ export default class Checkbox extends Component {
     type: PropTypes.oneOf(['checkbox', 'radio']),
 
     /** The HTML input value. */
-    value: PropTypes.string,
+    value: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.number,
+    ]),
   }
 
   static defaultProps = {
@@ -123,8 +127,6 @@ export default class Checkbox extends Component {
     name: 'Checkbox',
     type: META.TYPES.MODULE,
   }
-
-  state = {}
 
   componentDidMount() {
     this.setIndeterminate()
@@ -152,26 +154,24 @@ export default class Checkbox extends Component {
 
   handleClick = e => {
     debug('handleClick()')
-
-    const { onChange, onClick } = this.props
     const { checked, indeterminate } = this.state
 
-    if (this.canToggle()) {
-      if (onClick) onClick(e, { ...this.props, checked: !!checked, indeterminate: !!indeterminate })
-      if (onChange) onChange(e, { ...this.props, checked: !checked, indeterminate: false })
+    if (!this.canToggle()) return
 
-      this.trySetState({ checked: !checked, indeterminate: false })
-    }
+    _.invoke(this.props, 'onClick', e, { ...this.props, checked: !!checked, indeterminate: !!indeterminate })
+    _.invoke(this.props, 'onChange', e, { ...this.props, checked: !checked, indeterminate: false })
+
+    this.trySetState({ checked: !checked, indeterminate: false })
   }
 
   handleMouseDown = e => {
     debug('handleMouseDown()')
-
-    const { onMouseDown } = this.props
     const { checked, indeterminate } = this.state
 
-    _.invoke('focus', this.inputRef)
-    if (onMouseDown) onMouseDown(e, { ...this.props, checked: !!checked, indeterminate: !!indeterminate })
+    _.invoke(this.props, 'onMouseDown', e, { ...this.props, checked: !!checked, indeterminate: !!indeterminate })
+    _.invoke(this.inputRef, 'focus')
+
+    e.preventDefault()
   }
 
   // Note: You can't directly set the indeterminate prop on the input, so we
@@ -213,8 +213,9 @@ export default class Checkbox extends Component {
       'checkbox',
       className
     )
-    const rest = getUnhandledProps(Checkbox, this.props)
+    const unhandled = getUnhandledProps(Checkbox, this.props)
     const ElementType = getElementType(Checkbox, this.props)
+    const [htmlInputProps, rest] = partitionHTMLInputProps(unhandled, { htmlProps: [] })
 
     return (
       <ElementType
@@ -225,6 +226,7 @@ export default class Checkbox extends Component {
         onMouseDown={this.handleMouseDown}
       >
         <input
+          {...htmlInputProps}
           checked={checked}
           className='hidden'
           name={name}

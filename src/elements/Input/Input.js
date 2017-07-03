@@ -4,6 +4,7 @@ import PropTypes from 'prop-types'
 import React, { Children, cloneElement, Component } from 'react'
 
 import {
+  childrenUtils,
   createHTMLInput,
   createShorthandFactory,
   customPropTypes,
@@ -115,6 +116,20 @@ class Input extends Component {
     type: META.TYPES.ELEMENT,
   }
 
+  computeIcon = () => {
+    const { loading, icon } = this.props
+
+    if (!_.isNil(icon)) return icon
+    if (loading) return 'spinner'
+  }
+
+  computeTabIndex = () => {
+    const { disabled, tabIndex } = this.props
+
+    if (!_.isNil(tabIndex)) return tabIndex
+    if (disabled) return -1
+  }
+
   focus = () => (this.inputRef.focus())
 
   handleChange = (e) => {
@@ -135,6 +150,23 @@ class Input extends Component {
 
   handleInputRef = c => (this.inputRef = c)
 
+  partitionProps = () => {
+    const { disabled, onChange, type } = this.props
+
+    const tabIndex = this.computeTabIndex()
+    const unhandled = getUnhandledProps(Input, this.props)
+    const [htmlInputProps, rest] = partitionHTMLInputProps(unhandled)
+
+    htmlInputProps.ref = this.handleInputRef
+    htmlInputProps.type = type
+
+    if (disabled) htmlInputProps.disabled = disabled
+    if (onChange) htmlInputProps.onChange = this.handleChange
+    if (tabIndex) htmlInputProps.tabIndex = tabIndex
+
+    return [htmlInputProps, rest]
+  }
+
   render() {
     const {
       action,
@@ -152,9 +184,7 @@ class Input extends Component {
       label,
       labelPosition,
       loading,
-      onChange,
       size,
-      tabIndex,
       transparent,
       type,
     } = this.props
@@ -170,31 +200,20 @@ class Input extends Component {
       useKeyOnly(loading, 'loading'),
       useKeyOnly(transparent, 'transparent'),
       useValueAndKey(actionPosition, 'action') || useKeyOnly(action, 'action'),
-      useValueAndKey(iconPosition, 'icon') || useKeyOnly(icon, 'icon'),
+      useValueAndKey(iconPosition, 'icon') || useKeyOnly(icon || loading, 'icon'),
       useValueAndKey(labelPosition, 'labeled') || useKeyOnly(label, 'labeled'),
       'input',
       className,
     )
-    const unhandled = getUnhandledProps(Input, this.props)
     const ElementType = getElementType(Input, this.props)
-
-    // Heads up! We should pass `type` prop manually because `Input` component handles it
-    const [htmlInputProps, rest] = partitionHTMLInputProps({ ...unhandled, type })
-
-    if (onChange) htmlInputProps.onChange = this.handleChange
-    htmlInputProps.ref = this.handleInputRef
-
-    // tabIndex
-    if (!_.isNil(tabIndex)) htmlInputProps.tabIndex = tabIndex
-    else if (disabled) htmlInputProps.tabIndex = -1
+    const [htmlInputProps, rest] = this.partitionProps()
 
     // Render with children
     // ----------------------------------------
-    if (!_.isNil(children)) {
+    if (!childrenUtils.isNil(children)) {
       // add htmlInputProps to the `<input />` child
       const childElements = _.map(Children.toArray(children), (child) => {
         if (child.type !== 'input') return child
-
         return cloneElement(child, this.handleChildOverrides(child, htmlInputProps))
       })
 
@@ -203,15 +222,17 @@ class Input extends Component {
 
     // Render Shorthand
     // ----------------------------------------
-    const actionElement = Button.create(action, { defaultProps: { className: 'button' } })
-    const iconElement = Icon.create(icon)
-    const labelElement = Label.create(label, { defaultProps: {
-      className: cx(
-        'label',
-        // add 'left|right corner'
-        _.includes(labelPosition, 'corner') && labelPosition,
-      ),
-    } })
+    const actionElement = Button.create(action)
+    const iconElement = Icon.create(this.computeIcon())
+    const labelElement = Label.create(label, {
+      defaultProps: {
+        className: cx(
+          'label',
+          // add 'left|right corner'
+          _.includes(labelPosition, 'corner') && labelPosition,
+        ),
+      },
+    })
 
     return (
       <ElementType {...rest} className={classes}>
